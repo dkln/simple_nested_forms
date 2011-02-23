@@ -1,0 +1,149 @@
+= Simple nested forms
+
+Are you using the awesome simple_form library? Good for you! But there is a small problem: nested forms. This tiny little javascript library can help make your life a little easier.
+
+== What does the javascript do for you?
+
+It simply adds behavior to add or destroy actions.
+
+For the add action it simply inserts the given HTML to the form and replaces the ids in fields with timestamps. Rails will automaticaly create new items for you. (Note: be sure that you have used accepts_nested_attributes_for in your models)
+
+For the destroy action it adds a hidden field to the form with the _destroy flag. If you've turned on the :allow_destroy option for accepts_nested_attributes_for in your model, Rails will automatically destroy the item for you.
+
+== What do you need?
+
+To make the javascript library work, remember the following things:
+* Every nested item must be placed within a <fieldset>
+* All nested items must be placed within a parent <fieldset>
+* If you want to make the add button work, you'll need:
+  * A <nav> element with an <a>
+  * The <a> needs class "add_fields"
+  * The <a> contains the attribute "data-content" which contains the HTML for a new item
+  * The <nav> element must be placed within the parent <fieldet> of all the nested items
+* If you want to make the remove button work, you'll need:
+  * A <nav> element with an <a>
+  * The <a> needs class "destroy_fields"
+  * The <a> contains the attribute "data-id" which contains the object name for the item that needs to be deleted.
+  * The <nav> element must be placed within the <fieldset> of the nested item
+
+== Example HTML
+
+So, to sum things up in a simple HTML example:
+
+  <fieldset>
+    <div>
+      <label>First name</label>
+      <input type="text" name="contact[first_name]" value="Dude" />
+    </div>
+    <div>
+      <label>Middle name</label>
+      <input type="text" name="contact[middle_name]" value="von" />
+    </div>
+    <div>
+      <label>Last name</label>
+      <input type="text" name="contact[last_name]" value="Dudness" />
+    </div>
+  </fieldset>
+  <fieldset>
+    <h3>Telephone numbers</h3>
+
+    <fieldset>
+      <div>
+        <label>Number</label>
+        <input type="text" name="contact[telephone_numbers_attributes][1][number]" value="070-1234567" />
+      </div>
+      <nav>
+        <ol>
+          <li>
+            <a href="#" data-id="contact[telephone_numbers_attributes][1]" class="destroy_fields">Remove</a>
+          </li>
+        </ol>
+      </nav>
+    </fieldset>
+
+    <fieldset>
+      <div>
+        <label>Number</label>
+        <input type="text" name="contact[telephone_numbers_attributes][2][number]" value="020-1234567" />
+      </div>
+      <nav>
+        <ol>
+          <li>
+            <a href="#" data-id="contact[telephone_numbers_attributes][2]" class="destroy_fields">Remove</a>
+          </li>
+        </ol>
+      </nav>
+    </fieldset>
+
+    <nav>
+      <ol>
+        <li>
+          <a href="#" data-content="......." class="add_fields">Add</a>
+        </li>
+      </ol>
+    </nav>
+
+  </fieldset>
+
+== Ruby / HAML example
+
+First we need some Ruby magic. I personally use the following code to make my life even more easier:
+
+  module SimpleNestedForms
+
+    def nested_fields_for(form, association, text_new_record, &block)
+      field_html = form.simple_fields_for(association, &block)
+      new_html = form.simple_fields_for(association, new_association_object(form, association), :child_index => 'new', &block)
+
+      (field_html + nav_for_new_record(text_new_record, new_html)).html_safe
+    end
+
+    def nav_for_new_record(text, html_for_add)
+      "<nav class='new'><ol><li>#{link_to(text, '#', :"data-content" => "#{html_for_add}", :class => 'add_fields add')}</li></ol></nav>".html_safe
+    end
+
+    def nav_for_existing_record(text, form)
+      "<nav class='existing'><ol><li>#{link_to(text, '#', :class => 'destroy_fields destroy', :"data-id" => form.object_name)}</li></ol></nav>".html_safe
+    end
+
+    def new_association_object(form, association)
+      form.object.class.reflect_on_association(association).klass.new
+    end
+
+  end
+
+Now imagine you have a class called Contact with a set of telephone numbers:
+
+  class Contact < ActiveRecord::Base
+
+    has_many :telephone_numbers
+    accepts_nested_attributes_for :telephone_numbers, :allow_destroy => true
+
+  end
+
+Now it would be nice to add, edit or destroy telephone numbers for this contact would it? Your HAML view could look a little bit like this:
+
+  = simple_form_for resource do |form|
+    %fieldset
+      = form.input :first_name
+      = form.input :middle_nam
+      = form.input :last_name
+      = form.input :gender, :as => :radio, :collection => gender_choices
+
+    %fieldset
+      %h3 Telephone numbers
+      = nested_fields_for form, :telephone_numbers, 'Add' do |telephone_form|
+        %fieldset
+          = telephone_form.input :number
+          = nav_for_existing_record 'Remove', telephone_form
+
+The nested_fields_for helper takes a block. All the content captured from this block, will be placed in the anchor's data-content attribute within a nav element.
+
+== That's it!
+
+That's it. No rocket science involed here. When I can find the time, I will brew a nice gem for this :)
+
+= License and credits
+Use it and have fun with it! Comments, cakes and hugs are welcome! Just stick to the license!
+
+Copyright 2011, Diederick Lawson - Altovista. Released under the FreeBSD license.
